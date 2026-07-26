@@ -6,9 +6,21 @@ const log = require('./logger');
 const fs = require('fs');
 
 const ROOT = path.join(__dirname, '..');
+const PORT_CONF = path.join(ROOT, 'port.conf');
+
+// 读取端口配置，不存在则用默认9999
+function getPort() {
+  try {
+    if (fs.existsSync(PORT_CONF)) {
+      const port = parseInt(fs.readFileSync(PORT_CONF, 'utf-8').trim(), 10);
+      if (port > 0 && port < 65536) return port;
+    }
+  } catch {}
+  return 9999;
+}
 
 const app = express();
-const PORT = 9999;
+const PORT = getPort();
 const API_URL = 'https://platform.xiaomimimo.com/api/v1/tokenPlan/usage';
 const REFRESH_INTERVAL = 12 * 60 * 60 * 1000;
 

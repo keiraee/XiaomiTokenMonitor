@@ -134,6 +134,16 @@ serviceToken 过期（session级）
 
 ## 常见问题
 
+**Q: 安装后文件在哪里？**
+默认安装在 `C:\Users\你的用户名\XiaomiTokenMonitor`，脚本会明确显示路径。
+
+**Q: 没有 Node.js 怎么办？**
+安装脚本会自动用 winget 安装 Node.js LTS 版本。如果自动安装失败，手动下载：https://nodejs.org/zh-cn/
+
+**Q: 怎么查看服务是否在运行？**
+- 菜单选 `[5] 查看状态`
+- 或打开任务管理器 → 详细信息 → 搜索对应的 PID
+
 **Q: 端口被占用？**
 修改 `src/server.js` 中的 `PORT` 变量。
 
@@ -144,7 +154,12 @@ serviceToken 过期（session级）
 检查 Windows 设置 → 系统 → 通知 是否开启，专注助手是否关闭。
 
 **Q: 如何查看日志？**
-双击 `main.bat` → 选择 `[5] View Logs`，或直接打开 `server.log` 文件。
+菜单选 `[6] 查看日志`，或直接打开项目目录下的 `server.log` 文件。
 
 **Q: 多久需要手动登录一次？**
 passToken 有效期30天。在有效期内，serviceToken 过期会自动无头刷新，无需手动操作。超过30天需要重新登录一次。
+
+**Q: 怎么彻底卸载？**
+1. 菜单选 `[3] 停止服务`
+2. 菜单选 `[9] 移除开机自启`
+3. 删除安装目录 `C:\Users\你的用户名\XiaomiTokenMonitor`
