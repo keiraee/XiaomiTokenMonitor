@@ -107,7 +107,11 @@ function Create-Wrapper {
 
 function Test-XtmInstall {
     param([string]$InstallPath)
-    return (Test-Path "$InstallPath\src\server.js") -and (Test-Path "$InstallPath\package.json")
+    return (Test-Path "$InstallPath\install.conf") -or
+           (Test-Path "$InstallPath\.git") -or
+           (Test-Path "$InstallPath\install.ps1") -or
+           (Test-Path "$InstallPath\xtm.log") -or
+           ((Test-Path "$InstallPath\src\server.js") -and (Test-Path "$InstallPath\package.json"))
 }
 
 function Install-Project {
