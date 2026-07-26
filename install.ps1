@@ -288,13 +288,21 @@ function Install-AutoStart {
         Write-Host "[提示] 开机自启已存在，无需重复设置" -ForegroundColor Yellow
         return
     }
-    $action = New-ScheduledTaskAction -Execute "node" -Argument "src\server.js" -WorkingDirectory $script:INSTALL_DIR
+    # 找 node.exe 绝对路径
+    $nodePath = (Get-Command node -ErrorAction SilentlyContinue).Source
+    if (-not $nodePath) {
+        Write-Host "[错误] 未找到 node.exe" -ForegroundColor Red
+        return
+    }
+    $serverJs = "$script:INSTALL_DIR\src\server.js"
+    $action = New-ScheduledTaskAction -Execute $nodePath -Argument "`"$serverJs`"" -WorkingDirectory $script:INSTALL_DIR
     $trigger = New-ScheduledTaskTrigger -AtLogOn
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName $TASK_NAME -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
     Write-Host "[完成] 开机自启已设置" -ForegroundColor Green
     Write-Host ""
     Write-Host "  任务名称: $TASK_NAME" -ForegroundColor Gray
+    Write-Host "  执行文件: $nodePath" -ForegroundColor Gray
     Write-Host "  触发条件: 用户登录时" -ForegroundColor Gray
     Write-Host "  查看方式: 任务计划程序 → 搜索 $TASK_NAME" -ForegroundColor Gray
     Write-Host ""
@@ -381,8 +389,14 @@ while ($true) {
             } elseif (Test-Admin) {
                 Install-AutoStart
             } else {
-                Write-Host "[提示] 需要管理员权限，正在提权 ..." -ForegroundColor Yellow
-                Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -Command `"Import-Module ScheduledTasks; `$a=New-ScheduledTaskAction -Execute 'node' -Argument 'src\server.js' -WorkingDirectory '$script:INSTALL_DIR'; `$t=New-ScheduledTaskTrigger -AtLogOn; `$s=New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; Register-ScheduledTask -TaskName '$TASK_NAME' -Action `$a -Trigger `$t -Settings `$s -Force; Pause`""
+                $nodePath = (Get-Command node -ErrorAction SilentlyContinue).Source
+                if (-not $nodePath) {
+                    Write-Host "[错误] 未找到 node.exe" -ForegroundColor Red
+                } else {
+                    Write-Host "[提示] 需要管理员权限，正在提权 ..." -ForegroundColor Yellow
+                    $serverJs = "$script:INSTALL_DIR\src\server.js"
+                    Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -Command `"Import-Module ScheduledTasks; `$a=New-ScheduledTaskAction -Execute '$nodePath' -Argument `'`"$serverJs`"`' -WorkingDirectory '$script:INSTALL_DIR'; `$t=New-ScheduledTaskTrigger -AtLogOn; `$s=New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries; Register-ScheduledTask -TaskName '$TASK_NAME' -Action `$a -Trigger `$t -Settings `$s -Force; Pause`""
+                }
             }
             Pause
         }
