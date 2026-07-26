@@ -1,0 +1,17 @@
+{
+  "name": "xiaomi-token-monitor",
+  "version": "1.0.0",
+  "description": "Xiaomi platform token usage monitor with auto SSO login",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "keywords": ["xiaomi", "token", "monitor"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1",
+    "playwright": "^1.61.1"
+  }
+}
