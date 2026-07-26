@@ -283,6 +283,11 @@ function ReLogin {
 }
 
 function Install-AutoStart {
+    $existing = Get-ScheduledTask -TaskName $TASK_NAME -ErrorAction SilentlyContinue
+    if ($existing) {
+        Write-Host "[提示] 开机自启已存在，无需重复设置" -ForegroundColor Yellow
+        return
+    }
     $action = New-ScheduledTaskAction -Execute "node" -Argument "src\server.js" -WorkingDirectory $script:INSTALL_DIR
     $trigger = New-ScheduledTaskTrigger -AtLogOn
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
@@ -370,7 +375,10 @@ while ($true) {
         "6" { Show-Logs; Pause }
         "7" { ReLogin; Pause }
         "8" {
-            if (Test-Admin) {
+            $existing = Get-ScheduledTask -TaskName $TASK_NAME -ErrorAction SilentlyContinue
+            if ($existing) {
+                Write-Host "[提示] 开机自启已存在，无需重复设置" -ForegroundColor Yellow
+            } elseif (Test-Admin) {
                 Install-AutoStart
             } else {
                 Write-Host "[提示] 需要管理员权限，正在提权 ..." -ForegroundColor Yellow
@@ -379,7 +387,10 @@ while ($true) {
             Pause
         }
         "9" {
-            if (Test-Admin) {
+            $existing = Get-ScheduledTask -TaskName $TASK_NAME -ErrorAction SilentlyContinue
+            if (-not $existing) {
+                Write-Host "[提示] 未找到开机自启任务，无需移除" -ForegroundColor Yellow
+            } elseif (Test-Admin) {
                 Uninstall-AutoStart
             } else {
                 Write-Host "[提示] 需要管理员权限，正在提权 ..." -ForegroundColor Yellow
