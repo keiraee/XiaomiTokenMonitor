@@ -2,6 +2,10 @@
 setlocal enabledelayedexpansion
 title XiaomiTokenMonitor
 cd /d "%~dp0"
+set "PORT=9999"
+if exist port.conf (
+    for /f "usebackq delims=" %%P in (`powershell -NoProfile -Command "(Get-Content -Raw -LiteralPath 'port.conf').Trim()"`) do set "PORT=%%P"
+)
 
 :menu
 cls
@@ -55,8 +59,8 @@ timeout /t 5 /nobreak >nul
 if exist server.pid (
     set /p PID=<server.pid
     echo  [OK] Started (PID: !PID!)
-    echo       URL: http://localhost:9999
-    echo       API: http://localhost:9999/usage
+    echo       URL: http://localhost:!PORT!
+    echo       API: http://localhost:!PORT!/usage
 ) else (
     echo  [ERROR] Failed to start. Check server.log
 )
@@ -114,9 +118,9 @@ if !errorlevel! neq 0 (
 )
 echo  [STATUS] Running
 echo    PID:    !PID!
-echo    Port:   9999
-echo    URL:    http://localhost:9999
-echo    API:    http://localhost:9999/usage
+echo    Port:   !PORT!
+echo    URL:    http://localhost:!PORT!
+echo    API:    http://localhost:!PORT!/usage
 echo    Log:    %~dp0server.log
 goto wait
 

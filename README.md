@@ -1,165 +1,74 @@
 # XiaomiTokenMonitor
 
-小米平台 Token 用量监控工具。通过本地代理服务自动管理 SSO 登录，提供免鉴权的用量查询接口。
+Windows 下的小米平台 Token 用量监控工具。最终用户只需要执行一条 PowerShell 命令，安装脚本会自动准备运行环境、下载项目、安装依赖并打开管理菜单。
 
-## 功能特性
+## 一键安装与运行
 
-- **自动 SSO 管理** — passToken 有效期内（30天）自动无头刷新 serviceToken，无需人工干预
-- **智能认证** — serviceToken 过期时静默刷新，仅 passToken 过期才弹浏览器登录
-- **真实浏览器模拟** — 使用 Playwright 无头浏览器完成 SSO 流程，保持 UA 一致性
-- **定时刷新** — 每12小时自动刷新 Cookie
-- **系统通知** — 登录失败、刷新成功/失败时弹出 Windows 通知
-- **完整日志** — 所有请求、认证、刷新操作记录到 `server.log`
-- **一键操作** — 菜单化管理，启动/停止/重启/查看状态/查看日志
-- **开机自启** — 支持 Windows 计划任务自动启动
+以普通 PowerShell 执行：
 
-## 快速开始
+\`\`\`powershell
+irm https://raw.githubusercontent.com/keiraee/XiaomiTokenMonitor/main/install.ps1 | iex
+\`\`\`
 
-### 1. 克隆项目
+脚本会自动：
 
-```bash
-git clone <repo-url>
-cd XiaomiTokenMonitor
-```
+1. 检测或安装 Node.js LTS。
+2. 检测 Git。
+3. 下载或更新项目。
+4. 安装 npm 依赖。
+5. 安装 Playwright Chromium。
+6. 进入管理菜单。
 
-### 2. 安装依赖
+用户不需要手动执行 \`npm install\`、\`npm start\` 或 \`npx playwright install chromium\`。
 
-```bash
-npm install
-npx playwright install chromium
-```
+## 管理菜单
 
-### 3. 启动服务
+进入菜单后可以执行：
 
-双击 `main.bat`，选择 `[1] Start Service`
+- 安装 / 更新
+- 启动服务
+- 停止服务
+- 重启服务
+- 查看状态
+- 查看服务日志和操作日志
+- 重新登录
+- 设置或移除开机自启
+- 卸载
 
-首次运行会弹出浏览器，完成小米 SSO 登录后浏览器自动关闭，服务启动。
+默认安装目录为：
 
-## 使用方法
+\`\`\`
+C:\\Users\\当前用户名\\XiaomiTokenMonitor
+\`\`\`
 
-双击 `main.bat` 打开菜单：
+首次启动会打开浏览器完成小米 SSO 登录。
 
-```
-==========================================
-  XiaomiTokenMonitor
-==========================================
+## 服务地址
 
-  [1] Start Service        — 启动服务（后台隐藏运行）
-  [2] Stop Service         — 停止服务
-  [3] Restart Service      — 重启服务
-  [4] View Status          — 查看运行状态（PID、端口、地址）
-  [5] View Logs            — 查看最近20条日志
-  [6] Re-login             — 重新登录（刷新 Cookie）
-  [7] Install Auto-Start   — 设置开机自启（需管理员权限）
-  [8] Uninstall Auto-Start — 移除开机自启
-  [0] Exit                 — 退出菜单
-```
+默认服务仅监听本机回环地址：
 
-## 接口地址
+- 页面：\`http://127.0.0.1:9999/\`
+- 用量接口：\`http://127.0.0.1:9999/usage\`
+- 重新登录：本机 POST \`http://127.0.0.1:9999/relogin\`
 
-| 地址 | 说明 |
-|------|------|
-| `http://localhost:9999` | 网页面板（实时查看数据） |
-| `http://localhost:9999/usage` | JSON 数据接口（免鉴权） |
+首次安装时可以在菜单中设置端口。后续更新会保留已有端口配置。
 
-## 模板配置
+## 认证行为
 
-将请求地址改为本地代理接口：
+- 启动时检查 Cookie 和 passToken。
+- serviceToken 失效时优先无头刷新。
+- 无头刷新失败时自动打开浏览器重新登录。
+- 认证操作带并发锁和有限重试。
+- 默认每 12 小时自动刷新 Cookie。
 
-```javascript
-({
-  request: {
-    url: "http://localhost:9999/usage",
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-    },
-  },
+## 运行时文件
 
-  extractor: function (response) {
-    const item = response?.data?.usage?.items?.find(
-      (i) => i.name === "plan_total_token",
-    );
-    const percent = response?.data?.usage?.percent || 0;
+这些文件由程序自动生成，不需要用户手动创建：
 
-    return {
-      isValid: true,
-      used: (item?.used || 0) / 100000000,
-      total: (item?.limit || 0) / 100000000,
-      remaining: [(item?.limit || 0) - (item?.used || 0)] / 100000000,
-      unit: "亿 Credits",
-      extra: `${(percent * 100).toFixed(1)}%`,
-    };
-  },
-});
-```
+- \`cookies.json\`：登录 Cookie
+- \`meta.json\`：User-Agent
+- \`port.conf\`：端口配置
+- \`server.pid\`：服务 PID
+- \`server.log\`：服务日志
+- \`xtm.log\`：安装器操作日志
 
-## 项目结构
-
-```
-XiaomiTokenMonitor/
-├── main.bat            # 入口菜单（唯一需要双击的文件）
-├── src/
-│   ├── server.js       # 主服务 + 定时刷新
-│   ├── auth.js         # Playwright 浏览器登录 + 无头刷新
-│   ├── notify.js       # Windows 系统通知
-│   ├── notify.ps1      # 通知脚本
-│   └── logger.js       # 日志模块
-├── package.json
-├── .gitignore
-└── README.md
-```
-
-运行时自动生成（已 gitignore）：
-- `cookies.json` — 登录凭证
-- `meta.json` — User-Agent 配置
-- `server.pid` — 进程 PID
-- `server.log` — 运行日志
-
-## 认证机制
-
-```
-serviceToken 过期（session级）
-        ↓
-   无头浏览器刷新（静默，用 passToken 换新 serviceToken）
-        ↓ 成功
-   继续运行，无感知
-        ↓ 失败
-   passToken 已过期（30天）→ 弹浏览器手动登录
-```
-
-- **passToken** — 有效期30天，用于自动换取 serviceToken
-- **serviceToken** — session 级，过期后自动无头刷新
-- **User-Agent** — 登录时随机生成，会话内保持一致
-
-## 常见问题
-
-**Q: 安装后文件在哪里？**
-默认安装在 `C:\Users\你的用户名\XiaomiTokenMonitor`，脚本会明确显示路径。
-
-**Q: 没有 Node.js 怎么办？**
-安装脚本会自动用 winget 安装 Node.js LTS 版本。如果自动安装失败，手动下载：https://nodejs.org/zh-cn/
-
-**Q: 怎么查看服务是否在运行？**
-- 菜单选 `[5] 查看状态`
-- 或打开任务管理器 → 详细信息 → 搜索对应的 PID
-
-**Q: 端口被占用？**
-修改 `src/server.js` 中的 `PORT` 变量。
-
-**Q: 登录超时？**
-网络慢时页面加载可能超过60秒，但会继续等待你完成登录（最长5分钟）。
-
-**Q: 没收到通知？**
-检查 Windows 设置 → 系统 → 通知 是否开启，专注助手是否关闭。
-
-**Q: 如何查看日志？**
-菜单选 `[6] 查看日志`，或直接打开项目目录下的 `server.log` 文件。
-
-**Q: 多久需要手动登录一次？**
-passToken 有效期30天。在有效期内，serviceToken 过期会自动无头刷新，无需手动操作。超过30天需要重新登录一次。
-
-**Q: 怎么彻底卸载？**
-1. 菜单选 `[3] 停止服务`
-2. 菜单选 `[9] 移除开机自启`
-3. 删除安装目录 `C:\Users\你的用户名\XiaomiTokenMonitor`

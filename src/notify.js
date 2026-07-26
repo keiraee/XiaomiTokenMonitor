@@ -1,8 +1,8 @@
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 
 function notify(title, message) {
-  const text = `${title}\n\n${message}`;
-  exec(`msg ${process.env.USERNAME || '*'} /TIME:10 "${text}"`, (err) => {
+  const recipient = process.env.USERNAME || '*';
+  execFile('msg', [recipient, '/TIME:10', `${title}\n\n${message}`], (err) => {
     if (err) console.error('通知发送失败:', err.message);
     else console.log(`通知已发送: ${title}`);
   });

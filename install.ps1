@@ -178,12 +178,17 @@ function Install-Project {
     # 安装依赖
     Write-Host "[4/6] 安装 npm 依赖 ..." -ForegroundColor Cyan
     Push-Location $script:INSTALL_DIR
-    npm install --silent 2>&1 | Out-Null
+    try {
+        npm install --silent
+        if ($LASTEXITCODE -ne 0) { throw "npm 依赖安装失败，退出码: $LASTEXITCODE" }
 
-    # 安装浏览器
-    Write-Host "[5/6] 安装 Playwright 浏览器 ..." -ForegroundColor Cyan
-    npx playwright install chromium 2>&1 | Out-Null
-    Pop-Location
+        # 安装浏览器
+        Write-Host "[5/6] 安装 Playwright 浏览器 ..." -ForegroundColor Cyan
+        npx playwright install chromium
+        if ($LASTEXITCODE -ne 0) { throw "Playwright 浏览器安装失败，退出码: $LASTEXITCODE" }
+    } finally {
+        Pop-Location
+    }
 
     # 保存配置
     Write-Host "[6/6] 保存配置 ..." -ForegroundColor Cyan
@@ -352,9 +357,17 @@ function ReLogin {
     }
     if (Test-Path "$script:INSTALL_DIR\cookies.json") { Remove-Item "$script:INSTALL_DIR\cookies.json" }
     Push-Location $script:INSTALL_DIR
-    node -e "const a=require('./src/auth');a.login().then(()=>console.log('[完成] 登录成功')).catch(e=>console.error('[错误]',e.message))"
-    Pop-Location
-    Write-Log "重新登录" "登录完成"
+    try {
+        node -e "const a=require('./src/auth');a.login().then(()=>console.log('[完成] 登录成功')).catch(e=>{console.error('[错误]',e.message);process.exitCode=1})"
+        $loginExitCode = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
+    if ($loginExitCode -eq 0) {
+        Write-Log "重新登录" "登录成功"
+    } else {
+        Write-Log "重新登录" "登录失败，退出码=$loginExitCode"
+    }
 }
 
 function Install-AutoStart {
@@ -415,17 +428,40 @@ function Uninstall-All {
     $confirm = Read-Host "  输入 y 确认"
     if ($confirm -ne 'y') { Write-Host "  已取消" -ForegroundColor Gray; Write-Log "卸载" "用户取消"; return }
 
-    # 停止服务
+    # 停止服务并确认进程已退出
     if (Test-Path "$targetDir\server.pid") {
-        $svcPid = Get-Content "$targetDir\server.pid"
-        Stop-Process -Id $svcPid -Force -ErrorAction SilentlyContinue
-        Write-Log "卸载" "停止服务 PID=$svcPid"
+        $svcPid = (Get-Content "$targetDir\server.pid" -Raw).Trim()
+        if ($svcPid -match '^\d+$') {
+            $process = Get-Process -Id ([int]$svcPid) -ErrorAction SilentlyContinue
+            if ($process) {
+                Stop-Process -Id ([int]$svcPid) -Force -ErrorAction SilentlyContinue
+                try { Wait-Process -Id ([int]$svcPid) -Timeout 10 -ErrorAction Stop } catch {}
+                $process = Get-Process -Id ([int]$svcPid) -ErrorAction SilentlyContinue
+            }
+            if ($process) {
+                Write-Host "[错误] 服务进程仍在运行，已停止卸载，未删除目录" -ForegroundColor Red
+                Write-Log "卸载" "服务进程未退出 PID=$svcPid"
+                return
+            }
+            Write-Log "卸载" "停止服务 PID=$svcPid"
+        }
     }
 
-    # 移除计划任务
+    # 移除计划任务；普通权限下通过 UAC 提权，并确认任务确实消失
     $task = Get-ScheduledTask -TaskName $TASK_NAME -ErrorAction SilentlyContinue
     if ($task) {
-        Unregister-ScheduledTask -TaskName $TASK_NAME -Confirm:$false
+        if (Test-Admin) {
+            Unregister-ScheduledTask -TaskName $TASK_NAME -Confirm:$false -ErrorAction Stop
+        } else {
+            $removeCommand = "Unregister-ScheduledTask -TaskName '$TASK_NAME' -Confirm:`$false -ErrorAction Stop"
+            Start-Process powershell -Verb RunAs -Wait -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$removeCommand`"" | Out-Null
+        }
+
+        if (Get-ScheduledTask -TaskName $TASK_NAME -ErrorAction SilentlyContinue) {
+            Write-Host "[错误] 无法移除开机自启任务，已停止卸载，未删除目录" -ForegroundColor Red
+            Write-Log "卸载" "移除计划任务失败"
+            return
+        }
         Write-Host "[完成] 已移除计划任务" -ForegroundColor Green
         Write-Log "卸载" "移除计划任务"
     } else {
@@ -438,9 +474,9 @@ function Uninstall-All {
 
     # 删除安装目录
     if (Test-Path $targetDir) {
+        Write-Log "卸载" "准备删除目录 $targetDir"
         Remove-Item $targetDir -Recurse -Force
         Write-Host "[完成] 已删除 $targetDir" -ForegroundColor Green
-        Write-Log "卸载" "删除目录 $targetDir"
     } else {
         Write-Host "[提示] 目录不存在: $targetDir" -ForegroundColor Yellow
     }
