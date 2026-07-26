@@ -171,7 +171,7 @@ function Install-Project {
     } else {
         Write-Host "[3/6] 克隆项目到 $script:INSTALL_DIR ..." -ForegroundColor Cyan
         if (Test-Path $script:INSTALL_DIR) { Remove-Item $script:INSTALL_DIR -Recurse -Force }
-        git clone $REPO $script:INSTALL_DIR --quiet
+        git clone $REPO $script:INSTALL_DIR --depth 1 --quiet
     }
 
     # 安装依赖
