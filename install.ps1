@@ -202,8 +202,20 @@ function Install-Project {
     Write-Host "  服务地址: http://localhost:$script:PORT" -ForegroundColor White
     Write-Host ""
     Write-Host "  全局命令: 新开终端输入 mitoken 即可打开菜单" -ForegroundColor Yellow
-    Write-Host "  选择 [2] 启动服务，首次会弹出浏览器让你登录" -ForegroundColor Yellow
     Write-Host ""
+
+    # 安装/更新完成后自动重启服务
+    if ($isUpdate) {
+        Write-Host "[提示] 正在重启服务 ..." -ForegroundColor Cyan
+        Write-Log "安装" "更新完成，自动重启服务"
+        Restart-XtmService
+    } else {
+        Write-Host "[提示] 正在启动服务 ..." -ForegroundColor Cyan
+        Write-Log "安装" "首次安装完成，自动启动服务"
+        Write-Host "  首次会弹出浏览器让你登录小米账号" -ForegroundColor Yellow
+        Write-Host ""
+        Start-XtmService
+    }
 }
 
 function Start-XtmService {
