@@ -157,6 +157,7 @@ function Install-Project {
     # 保存配置
     Write-Host "[6/6] 保存配置 ..." -ForegroundColor Cyan
     Set-Content -Path "$script:INSTALL_DIR\port.conf" -Value $script:PORT -Encoding UTF8
+    Set-Content -Path "$script:INSTALL_DIR\install.conf" -Value $script:INSTALL_DIR -Encoding UTF8
     Create-Wrapper
     Add-ToPath
 
@@ -298,14 +299,22 @@ function Uninstall-AutoStart {
 }
 
 function Uninstall-All {
+    # 读取实际安装路径
+    $confFile = "$script:INSTALL_DIR\install.conf"
+    $targetDir = $script:INSTALL_DIR
+    if (Test-Path $confFile) {
+        $targetDir = (Get-Content $confFile -Raw).Trim()
+    }
+
     Write-Host ""
+    Write-Host "  安装目录: $targetDir" -ForegroundColor Cyan
     Write-Host "  确定要卸载吗？这会删除所有数据（包括 Cookie）" -ForegroundColor Yellow
     $confirm = Read-Host "  输入 y 确认"
     if ($confirm -ne 'y') { Write-Host "  已取消" -ForegroundColor Gray; return }
 
     # 停止服务
-    if (Test-Path "$script:INSTALL_DIR\server.pid") {
-        $svcPid = Get-Content "$script:INSTALL_DIR\server.pid"
+    if (Test-Path "$targetDir\server.pid") {
+        $svcPid = Get-Content "$targetDir\server.pid"
         Stop-Process -Id $svcPid -Force -ErrorAction SilentlyContinue
     }
 
@@ -316,9 +325,11 @@ function Uninstall-All {
     Remove-FromPath
 
     # 删除安装目录
-    if (Test-Path $script:INSTALL_DIR) {
-        Remove-Item $script:INSTALL_DIR -Recurse -Force
-        Write-Host "[完成] 已删除 $script:INSTALL_DIR" -ForegroundColor Green
+    if (Test-Path $targetDir) {
+        Remove-Item $targetDir -Recurse -Force
+        Write-Host "[完成] 已删除 $targetDir" -ForegroundColor Green
+    } else {
+        Write-Host "[提示] 目录不存在: $targetDir" -ForegroundColor Yellow
     }
 
     Write-Host ""

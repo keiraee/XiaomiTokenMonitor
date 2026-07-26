@@ -2,6 +2,7 @@ node_modules/
 cookies.json
 meta.json
 port.conf
+install.conf
 server.pid
 server.log
 .claude/
