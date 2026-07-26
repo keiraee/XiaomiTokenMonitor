@@ -167,7 +167,8 @@ function Install-Project {
     # 克隆/更新项目
     if (Test-Path "$script:INSTALL_DIR\.git") {
         Write-Host "[3/6] 更新项目 ..." -ForegroundColor Cyan
-        git -C $script:INSTALL_DIR pull --quiet
+        git -C $script:INSTALL_DIR fetch --depth 1 --quiet
+        git -C $script:INSTALL_DIR reset --hard origin/main --quiet
     } else {
         Write-Host "[3/6] 克隆项目到 $script:INSTALL_DIR ..." -ForegroundColor Cyan
         if (Test-Path $script:INSTALL_DIR) { Remove-Item $script:INSTALL_DIR -Recurse -Force }
