@@ -324,6 +324,7 @@ function Uninstall-All {
     Write-Host ""
     Write-Host "[完成] 卸载完成" -ForegroundColor Green
     Write-Host ""
+    exit
 }
 
 function Test-Admin {
