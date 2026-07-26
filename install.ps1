@@ -1,4 +1,4 @@
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+﻿[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 & {
 $ErrorActionPreference = "Stop"
@@ -81,11 +81,13 @@ function Remove-FromPath {
 }
 
 function Create-Wrapper {
-    $wrapper = @"
-@echo off
-powershell -NoProfile -ExecutionPolicy Bypass -File "$script:INSTALL_DIR\install.ps1"
-"@
-    Set-Content -Path "$script:INSTALL_DIR\mitoken.cmd" -Value $wrapper -Encoding ASCII
+    $dir = $script:INSTALL_DIR
+    $lines = @(
+        '@echo off'
+        'chcp 65001 >nul'
+        "powershell -NoProfile -ExecutionPolicy Bypass -File `"$dir\install.ps1`""
+    )
+    Set-Content -Path "$dir\mitoken.cmd" -Value ($lines -join "`r`n") -Encoding ASCII
 }
 
 function Install-Project {
