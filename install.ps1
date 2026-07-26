@@ -294,8 +294,13 @@ function Install-AutoStart {
 }
 
 function Uninstall-AutoStart {
-    Unregister-ScheduledTask -TaskName $TASK_NAME -Confirm:$false -ErrorAction SilentlyContinue
-    Write-Host "[完成] 开机自启已移除" -ForegroundColor Green
+    $task = Get-ScheduledTask -TaskName $TASK_NAME -ErrorAction SilentlyContinue
+    if ($task) {
+        Unregister-ScheduledTask -TaskName $TASK_NAME -Confirm:$false
+        Write-Host "[完成] 开机自启已移除" -ForegroundColor Green
+    } else {
+        Write-Host "[提示] 未找到开机自启任务，无需移除" -ForegroundColor Yellow
+    }
 }
 
 function Uninstall-All {
@@ -319,7 +324,13 @@ function Uninstall-All {
     }
 
     # 移除计划任务
-    Unregister-ScheduledTask -TaskName $TASK_NAME -Confirm:$false -ErrorAction SilentlyContinue
+    $task = Get-ScheduledTask -TaskName $TASK_NAME -ErrorAction SilentlyContinue
+    if ($task) {
+        Unregister-ScheduledTask -TaskName $TASK_NAME -Confirm:$false
+        Write-Host "[完成] 已移除计划任务" -ForegroundColor Green
+    } else {
+        Write-Host "[提示] 无计划任务" -ForegroundColor Gray
+    }
 
     # 从 PATH 移除
     Remove-FromPath
