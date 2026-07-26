@@ -8,6 +8,16 @@ $script:INSTALL_DIR = $DEFAULT_DIR
 $script:PORT = "9999"
 $TASK_NAME = "XiaomiTokenMonitor"
 
+function Write-Log {
+    param([string]$Action, [string]$Message = "")
+    $logFile = "$script:INSTALL_DIR\xtm.log"
+    $dir = Split-Path $logFile
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $ts = Get-Date -Format "yyyy/MM/dd HH:mm:ss"
+    $line = "[$ts] [$Action] $Message"
+    Add-Content -Path $logFile -Value $line -Encoding UTF8
+}
+
 function Show-Menu {
     Clear-Host
     $portConf = "$script:INSTALL_DIR\port.conf"
@@ -91,6 +101,7 @@ function Create-Wrapper {
 }
 
 function Install-Project {
+    Write-Log "安装" "开始安装/更新"
     Write-Host "==========================================" -ForegroundColor Cyan
     Write-Host "  开始安装" -ForegroundColor Cyan
     Write-Host "==========================================" -ForegroundColor Cyan
@@ -163,6 +174,7 @@ function Install-Project {
     Create-Wrapper
     Add-ToPath
 
+    Write-Log "安装" "安装完成 路径=$script:INSTALL_DIR 端口=$script:PORT"
     Write-Host ""
     Write-Host "==========================================" -ForegroundColor Green
     Write-Host "  安装完成!" -ForegroundColor Green
@@ -178,6 +190,7 @@ function Install-Project {
 }
 
 function Start-XtmService {
+    Write-Log "启动" "启动服务"
     if (-not (Test-Path "$script:INSTALL_DIR\src\server.js")) {
         Write-Host "[错误] 未安装，请先选择 [1] 安装" -ForegroundColor Red; return
     }
@@ -187,6 +200,7 @@ function Start-XtmService {
         $proc = Get-Process -Id $svcPid -ErrorAction SilentlyContinue
         if ($proc) {
             Write-Host "[提示] 服务已在运行 (PID: $svcPid)" -ForegroundColor Yellow
+            Write-Log "启动" "服务已在运行 PID=$svcPid"
             Pop-Location; return
         }
     }
@@ -197,6 +211,7 @@ function Start-XtmService {
         $svcPid = Get-Content "server.pid"
         $portConf = "$script:INSTALL_DIR\port.conf"
         $curPort = if (Test-Path $portConf) { (Get-Content $portConf -Raw).Trim() } else { "9999" }
+        Write-Log "启动" "启动成功 PID=$svcPid 端口=$curPort"
         Write-Host "[完成] 服务已启动" -ForegroundColor Green
         Write-Host ""
         Write-Host "  PID:  $svcPid"
@@ -206,30 +221,37 @@ function Start-XtmService {
         Write-Host ""
         Write-Host "  查看进程: 任务管理器 → 详细信息 → 搜索 PID $svcPid" -ForegroundColor Gray
     } else {
+        Write-Log "启动" "启动失败"
         Write-Host "[错误] 启动失败，请选 [6] 查看日志" -ForegroundColor Red
     }
     Pop-Location
 }
 
 function Stop-XtmService {
+    Write-Log "停止" "停止服务"
     if (-not (Test-Path "$script:INSTALL_DIR\server.pid")) {
-        Write-Host "[提示] 服务未运行" -ForegroundColor Yellow; return
+        Write-Host "[提示] 服务未运行" -ForegroundColor Yellow
+        Write-Log "停止" "服务未运行"
+        return
     }
     $svcPid = Get-Content "$script:INSTALL_DIR\server.pid"
     $proc = Get-Process -Id $svcPid -ErrorAction SilentlyContinue
     if (-not $proc) {
         Write-Host "[提示] 进程已不存在" -ForegroundColor Yellow
         Remove-Item "$script:INSTALL_DIR\server.pid" -ErrorAction SilentlyContinue
+        Write-Log "停止" "进程已不存在 PID=$svcPid"
         return
     }
     Write-Host "[停止] 正在终止进程 (PID: $svcPid) ..." -ForegroundColor Cyan
     Stop-Process -Id $svcPid -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
     Remove-Item "$script:INSTALL_DIR\server.pid" -ErrorAction SilentlyContinue
+    Write-Log "停止" "停止成功 PID=$svcPid"
     Write-Host "[完成] 服务已停止" -ForegroundColor Green
 }
 
 function Restart-XtmService {
+    Write-Log "重启" "重启服务"
     Stop-XtmService
     Start-Sleep -Seconds 2
     Start-XtmService
@@ -273,6 +295,7 @@ function Show-Logs {
 }
 
 function ReLogin {
+    Write-Log "重新登录" "触发重新登录"
     if (-not (Test-Path "$script:INSTALL_DIR\src\auth.js")) {
         Write-Host "[错误] 未安装" -ForegroundColor Red; return
     }
@@ -280,18 +303,22 @@ function ReLogin {
     Push-Location $script:INSTALL_DIR
     node -e "const a=require('./src/auth');a.login().then(()=>console.log('[完成] 登录成功')).catch(e=>console.error('[错误]',e.message))"
     Pop-Location
+    Write-Log "重新登录" "登录完成"
 }
 
 function Install-AutoStart {
+    Write-Log "开机自启" "设置开机自启"
     $existing = Get-ScheduledTask -TaskName $TASK_NAME -ErrorAction SilentlyContinue
     if ($existing) {
         Write-Host "[提示] 开机自启已存在，无需重复设置" -ForegroundColor Yellow
+        Write-Log "开机自启" "已存在，跳过"
         return
     }
     # 找 node.exe 绝对路径
     $nodePath = (Get-Command node -ErrorAction SilentlyContinue).Source
     if (-not $nodePath) {
         Write-Host "[错误] 未找到 node.exe" -ForegroundColor Red
+        Write-Log "开机自启" "失败：未找到 node.exe"
         return
     }
     $serverJs = "$script:INSTALL_DIR\src\server.js"
@@ -299,6 +326,7 @@ function Install-AutoStart {
     $trigger = New-ScheduledTaskTrigger -AtLogOn
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName $TASK_NAME -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
+    Write-Log "开机自启" "设置成功 $nodePath"
     Write-Host "[完成] 开机自启已设置" -ForegroundColor Green
     Write-Host ""
     Write-Host "  任务名称: $TASK_NAME" -ForegroundColor Gray
@@ -309,16 +337,20 @@ function Install-AutoStart {
 }
 
 function Uninstall-AutoStart {
+    Write-Log "移除自启" "移除开机自启"
     $task = Get-ScheduledTask -TaskName $TASK_NAME -ErrorAction SilentlyContinue
     if ($task) {
         Unregister-ScheduledTask -TaskName $TASK_NAME -Confirm:$false
+        Write-Log "移除自启" "移除成功"
         Write-Host "[完成] 开机自启已移除" -ForegroundColor Green
     } else {
+        Write-Log "移除自启" "任务不存在"
         Write-Host "[提示] 未找到开机自启任务，无需移除" -ForegroundColor Yellow
     }
 }
 
 function Uninstall-All {
+    Write-Log "卸载" "开始卸载"
     # 读取实际安装路径
     $confFile = "$script:INSTALL_DIR\install.conf"
     $targetDir = $script:INSTALL_DIR
@@ -330,12 +362,13 @@ function Uninstall-All {
     Write-Host "  安装目录: $targetDir" -ForegroundColor Cyan
     Write-Host "  确定要卸载吗？这会删除所有数据（包括 Cookie）" -ForegroundColor Yellow
     $confirm = Read-Host "  输入 y 确认"
-    if ($confirm -ne 'y') { Write-Host "  已取消" -ForegroundColor Gray; return }
+    if ($confirm -ne 'y') { Write-Host "  已取消" -ForegroundColor Gray; Write-Log "卸载" "用户取消"; return }
 
     # 停止服务
     if (Test-Path "$targetDir\server.pid") {
         $svcPid = Get-Content "$targetDir\server.pid"
         Stop-Process -Id $svcPid -Force -ErrorAction SilentlyContinue
+        Write-Log "卸载" "停止服务 PID=$svcPid"
     }
 
     # 移除计划任务
@@ -343,17 +376,20 @@ function Uninstall-All {
     if ($task) {
         Unregister-ScheduledTask -TaskName $TASK_NAME -Confirm:$false
         Write-Host "[完成] 已移除计划任务" -ForegroundColor Green
+        Write-Log "卸载" "移除计划任务"
     } else {
         Write-Host "[提示] 无计划任务" -ForegroundColor Gray
     }
 
     # 从 PATH 移除
     Remove-FromPath
+    Write-Log "卸载" "清理PATH"
 
     # 删除安装目录
     if (Test-Path $targetDir) {
         Remove-Item $targetDir -Recurse -Force
         Write-Host "[完成] 已删除 $targetDir" -ForegroundColor Green
+        Write-Log "卸载" "删除目录 $targetDir"
     } else {
         Write-Host "[提示] 目录不存在: $targetDir" -ForegroundColor Yellow
     }
@@ -374,6 +410,7 @@ function Test-Admin {
 while ($true) {
     Show-Menu
     $choice = Read-Host "  请选择操作"
+    Write-Log "菜单" "用户选择: $choice"
     switch ($choice) {
         "1" { Install-Project; Pause }
         "2" { Start-XtmService; Pause }
