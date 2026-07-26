@@ -101,33 +101,50 @@ function Create-Wrapper {
 }
 
 function Install-Project {
-    Write-Log "安装" "开始安装/更新"
-    Write-Host "==========================================" -ForegroundColor Cyan
-    Write-Host "  开始安装" -ForegroundColor Cyan
-    Write-Host "==========================================" -ForegroundColor Cyan
-    Write-Host ""
+    $isUpdate = Test-Path "$script:INSTALL_DIR\.git"
 
-    # 选择安装路径
-    Write-Host "  默认安装路径: $DEFAULT_DIR" -ForegroundColor Gray
-    $customPath = Read-Host "  自定义路径 (回车使用默认)"
-    if ($customPath -and $customPath.Trim() -ne "") {
-        $script:INSTALL_DIR = $customPath.Trim().TrimEnd('\')
+    if ($isUpdate) {
+        # 更新模式：读取现有配置
+        Write-Log "更新" "开始更新"
+        Write-Host "==========================================" -ForegroundColor Cyan
+        Write-Host "  更新项目" -ForegroundColor Cyan
+        Write-Host "==========================================" -ForegroundColor Cyan
+        Write-Host ""
+        $portConf = "$script:INSTALL_DIR\port.conf"
+        if (Test-Path $portConf) { $script:PORT = (Get-Content $portConf -Raw).Trim() }
+        Write-Host "  安装目录: $script:INSTALL_DIR" -ForegroundColor Green
+        Write-Host "  服务端口: $script:PORT" -ForegroundColor Green
+        Write-Host ""
     } else {
-        $script:INSTALL_DIR = $DEFAULT_DIR
-    }
-    Write-Host "  安装路径: $script:INSTALL_DIR" -ForegroundColor Green
-    Write-Host ""
+        # 首次安装：选择路径和端口
+        Write-Log "安装" "首次安装"
+        Write-Host "==========================================" -ForegroundColor Cyan
+        Write-Host "  首次安装" -ForegroundColor Cyan
+        Write-Host "==========================================" -ForegroundColor Cyan
+        Write-Host ""
 
-    # 选择端口
-    Write-Host "  默认端口: 9999" -ForegroundColor Gray
-    $customPort = Read-Host "  自定义端口 (回车使用默认)"
-    if ($customPort -and $customPort.Trim() -match '^\d+$') {
-        $script:PORT = $customPort.Trim()
-    } else {
-        $script:PORT = "9999"
+        # 选择安装路径
+        Write-Host "  默认安装路径: $DEFAULT_DIR" -ForegroundColor Gray
+        $customPath = Read-Host "  自定义路径 (回车使用默认)"
+        if ($customPath -and $customPath.Trim() -ne "") {
+            $script:INSTALL_DIR = $customPath.Trim().TrimEnd('\')
+        } else {
+            $script:INSTALL_DIR = $DEFAULT_DIR
+        }
+        Write-Host "  安装路径: $script:INSTALL_DIR" -ForegroundColor Green
+        Write-Host ""
+
+        # 选择端口
+        Write-Host "  默认端口: 9999" -ForegroundColor Gray
+        $customPort = Read-Host "  自定义端口 (回车使用默认)"
+        if ($customPort -and $customPort.Trim() -match '^\d+$') {
+            $script:PORT = $customPort.Trim()
+        } else {
+            $script:PORT = "9999"
+        }
+        Write-Host "  端口: $script:PORT" -ForegroundColor Green
+        Write-Host ""
     }
-    Write-Host "  端口: $script:PORT" -ForegroundColor Green
-    Write-Host ""
 
     # 检查 Node.js
     Write-Host "[1/6] 检查 Node.js ..." -ForegroundColor Cyan
