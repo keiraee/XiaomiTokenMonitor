@@ -41,6 +41,11 @@ function Show-Menu {
     Write-Host ""
     Write-Host "  =========================================="
     Write-Host "  安装目录: $script:INSTALL_DIR"
+    if (Test-Path "$script:INSTALL_DIR\install.ps1") {
+        Write-Host "  管理脚本: $script:INSTALL_DIR\install.ps1"
+    } else {
+        Write-Host "  管理脚本: 安装完成后生成"
+    }
     Write-Host "  服务端口: $curPort"
     Write-Host "  服务地址: http://localhost:$curPort"
     Write-Host "  =========================================="
@@ -100,8 +105,13 @@ function Create-Wrapper {
     Set-Content -Path "$dir\mitoken.cmd" -Value ($lines -join "`r`n") -Encoding ASCII
 }
 
+function Test-XtmInstall {
+    param([string]$InstallPath)
+    return (Test-Path "$InstallPath\src\server.js") -and (Test-Path "$InstallPath\package.json")
+}
+
 function Install-Project {
-    $isUpdate = Test-Path "$script:INSTALL_DIR\install.conf"
+    $isUpdate = (Test-Path "$script:INSTALL_DIR\install.conf") -or (Test-XtmInstall $script:INSTALL_DIR)
 
     if ($isUpdate) {
         # 更新模式：读取现有配置
@@ -147,7 +157,7 @@ function Install-Project {
     }
 
     # 用户选择了已有安装目录时，切换为更新模式
-    if (-not $isUpdate -and (Test-Path "$script:INSTALL_DIR\install.conf")) {
+    if (-not $isUpdate -and ((Test-Path "$script:INSTALL_DIR\install.conf") -or (Test-XtmInstall $script:INSTALL_DIR))) {
         $isUpdate = $true
         $portConf = "$script:INSTALL_DIR\port.conf"
         if (Test-Path $portConf) { $script:PORT = (Get-Content $portConf -Raw).Trim() }

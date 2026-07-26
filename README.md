@@ -41,6 +41,8 @@ irm https://raw.githubusercontent.com/keiraee/XiaomiTokenMonitor/main/install.ps
 C:\Users\当前用户名\XiaomiTokenMonitor
 ~~~
 
+安装完成后，管理脚本位于安装目录下的 <code>install.ps1</code>。
+
 ## 使用方法
 
 运行一键命令后会进入管理菜单：
