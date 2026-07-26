@@ -314,13 +314,34 @@ function Get-Status {
 }
 
 function Show-Logs {
-    $logFile = "$script:INSTALL_DIR\server.log"
-    if (-not (Test-Path $logFile)) {
-        Write-Host "[提示] 暂无日志" -ForegroundColor Yellow; return
-    }
-    Write-Host "--- 最近20条日志 ---" -ForegroundColor Cyan
     Write-Host ""
-    Get-Content $logFile -Tail 20 -Encoding UTF8
+    Write-Host "  [1] 服务日志 (server.log)" -ForegroundColor Cyan
+    Write-Host "  [2] 操作日志 (xtm.log)" -ForegroundColor Cyan
+    Write-Host ""
+    $logChoice = Read-Host "  选择日志类型"
+    switch ($logChoice) {
+        "1" {
+            $logFile = "$script:INSTALL_DIR\server.log"
+            if (-not (Test-Path $logFile)) {
+                Write-Host "[提示] 暂无服务日志" -ForegroundColor Yellow; return
+            }
+            Write-Host "--- 最近20条服务日志 ---" -ForegroundColor Cyan
+            Write-Host ""
+            Get-Content $logFile -Tail 20 -Encoding UTF8
+        }
+        "2" {
+            $logFile = "$script:INSTALL_DIR\xtm.log"
+            if (-not (Test-Path $logFile)) {
+                Write-Host "[提示] 暂无操作日志" -ForegroundColor Yellow; return
+            }
+            Write-Host "--- 最近20条操作日志 ---" -ForegroundColor Cyan
+            Write-Host ""
+            Get-Content $logFile -Tail 20 -Encoding UTF8
+        }
+        default {
+            Write-Host "无效选项" -ForegroundColor Red
+        }
+    }
 }
 
 function ReLogin {
