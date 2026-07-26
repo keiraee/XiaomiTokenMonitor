@@ -33,7 +33,7 @@ irm https://raw.githubusercontent.com/keiraee/XiaomiTokenMonitor/main/install.ps
 4. 等待安装完成。
 5. 服务启动后，在弹出的浏览器中完成小米 SSO 登录。
 
-安装脚本会自动处理 Node.js、项目文件、npm 依赖和 Playwright 浏览器的安装。
+安装脚本会自动处理 Node.js、项目文件、npm 依赖和 Playwright 浏览器的安装，不需要手动安装 Git。
 
 默认安装目录：
 
@@ -230,4 +230,3 @@ C:\Users\当前用户名\XiaomiTokenMonitor
 
 - 登录 Cookie 保存在本地安装目录中，请勿分享 <code>cookies.json</code>。
 - 服务默认只监听本机，不提供局域网访问。
-

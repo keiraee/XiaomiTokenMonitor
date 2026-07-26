@@ -2,7 +2,7 @@
 
 & {
 $ErrorActionPreference = "Stop"
-$REPO = "https://github.com/keiraee/XiaomiTokenMonitor.git"
+$ARCHIVE_URL = "https://github.com/keiraee/XiaomiTokenMonitor/archive/refs/heads/main.zip"
 $DEFAULT_DIR = "$env:USERPROFILE\XiaomiTokenMonitor"
 $script:INSTALL_DIR = $DEFAULT_DIR
 $script:PORT = "9999"
@@ -101,7 +101,7 @@ function Create-Wrapper {
 }
 
 function Install-Project {
-    $isUpdate = Test-Path "$script:INSTALL_DIR\.git"
+    $isUpdate = Test-Path "$script:INSTALL_DIR\install.conf"
 
     if ($isUpdate) {
         # 更新模式：读取现有配置
@@ -146,44 +146,67 @@ function Install-Project {
         Write-Host ""
     }
 
+    # 用户选择了已有安装目录时，切换为更新模式
+    if (-not $isUpdate -and (Test-Path "$script:INSTALL_DIR\install.conf")) {
+        $isUpdate = $true
+        $portConf = "$script:INSTALL_DIR\port.conf"
+        if (Test-Path $portConf) { $script:PORT = (Get-Content $portConf -Raw).Trim() }
+    }
+
+    if ($isUpdate) {
+        Stop-XtmService
+    } elseif (Test-Path $script:INSTALL_DIR) {
+        $existingFiles = @(Get-ChildItem -LiteralPath $script:INSTALL_DIR -Force -ErrorAction SilentlyContinue)
+        if ($existingFiles.Count -gt 0) {
+            throw "目标目录已存在且不是 XiaomiTokenMonitor 安装目录: $script:INSTALL_DIR"
+        }
+    }
+
     # 检查 Node.js
-    Write-Host "[1/6] 检查 Node.js ..." -ForegroundColor Cyan
+    Write-Host "[1/5] 检查 Node.js ..." -ForegroundColor Cyan
     if (-not (Test-Node)) {
         Write-Host "  未检测到 Node.js" -ForegroundColor Yellow
         if (-not (Install-Node)) { return }
     }
     Write-Host "  Node.js: $(node -v)" -ForegroundColor Green
 
-    # 检查 Git
-    Write-Host "[2/6] 检查 Git ..." -ForegroundColor Cyan
-    try {
-        $null = Get-Command git -ErrorAction Stop
-        Write-Host "  Git: $(git --version)" -ForegroundColor Green
-    } catch {
-        Write-Host "[错误] 未检测到 Git，请先安装: https://git-scm.com/" -ForegroundColor Red
-        return
-    }
-
-    # 克隆/更新项目
-    if (Test-Path "$script:INSTALL_DIR\.git") {
-        Write-Host "[3/6] 更新项目 ..." -ForegroundColor Cyan
-        git -C $script:INSTALL_DIR fetch --depth 1 --quiet
-        git -C $script:INSTALL_DIR reset --hard origin/main --quiet
+    # 下载并解压项目，不需要 Git
+    if ($isUpdate) {
+        Write-Host "[2/5] 下载更新 ..." -ForegroundColor Cyan
     } else {
-        Write-Host "[3/6] 克隆项目到 $script:INSTALL_DIR ..." -ForegroundColor Cyan
-        if (Test-Path $script:INSTALL_DIR) { Remove-Item $script:INSTALL_DIR -Recurse -Force }
-        git clone $REPO $script:INSTALL_DIR --depth 1 --quiet
+        Write-Host "[2/5] 下载项目 ..." -ForegroundColor Cyan
+    }
+    $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("XiaomiTokenMonitor-" + [guid]::NewGuid().ToString('N'))
+    $zipPath = Join-Path $tempRoot "project.zip"
+    $extractPath = Join-Path $tempRoot "extract"
+    try {
+        New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
+        Invoke-WebRequest -UseBasicParsing -Uri $ARCHIVE_URL -OutFile $zipPath
+        Expand-Archive -LiteralPath $zipPath -DestinationPath $extractPath -Force
+        $sourceDir = Join-Path $extractPath "XiaomiTokenMonitor-main"
+        if (-not (Test-Path "$sourceDir\src\server.js")) {
+            throw "下载的项目压缩包格式无效"
+        }
+        if (-not (Test-Path $script:INSTALL_DIR)) {
+            New-Item -ItemType Directory -Path $script:INSTALL_DIR -Force | Out-Null
+        }
+        if (Test-Path "$script:INSTALL_DIR\.git") {
+            Remove-Item "$script:INSTALL_DIR\.git" -Recurse -Force
+        }
+        Get-ChildItem -LiteralPath $sourceDir -Force | Copy-Item -Destination $script:INSTALL_DIR -Recurse -Force
+    } finally {
+        if (Test-Path $tempRoot) { Remove-Item $tempRoot -Recurse -Force -ErrorAction SilentlyContinue }
     }
 
     # 安装依赖
-    Write-Host "[4/6] 安装 npm 依赖 ..." -ForegroundColor Cyan
+    Write-Host "[3/5] 安装 npm 依赖 ..." -ForegroundColor Cyan
     Push-Location $script:INSTALL_DIR
     try {
         npm install --silent
         if ($LASTEXITCODE -ne 0) { throw "npm 依赖安装失败，退出码: $LASTEXITCODE" }
 
         # 安装浏览器
-        Write-Host "[5/6] 安装 Playwright 浏览器 ..." -ForegroundColor Cyan
+        Write-Host "[4/5] 安装 Playwright 浏览器 ..." -ForegroundColor Cyan
         npx playwright install chromium
         if ($LASTEXITCODE -ne 0) { throw "Playwright 浏览器安装失败，退出码: $LASTEXITCODE" }
     } finally {
@@ -191,7 +214,7 @@ function Install-Project {
     }
 
     # 保存配置
-    Write-Host "[6/6] 保存配置 ..." -ForegroundColor Cyan
+    Write-Host "[5/5] 保存配置 ..." -ForegroundColor Cyan
     Set-Content -Path "$script:INSTALL_DIR\port.conf" -Value $script:PORT -Encoding UTF8
     Set-Content -Path "$script:INSTALL_DIR\install.conf" -Value $script:INSTALL_DIR -Encoding UTF8
     Create-Wrapper
