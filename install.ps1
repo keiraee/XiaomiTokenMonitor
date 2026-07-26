@@ -458,14 +458,18 @@ function Uninstall-All {
             $process = Get-Process -Id ([int]$svcPid) -ErrorAction SilentlyContinue
             if ($process) {
                 Stop-Process -Id ([int]$svcPid) -Force -ErrorAction SilentlyContinue
-                try { Wait-Process -Id ([int]$svcPid) -Timeout 10 -ErrorAction Stop } catch {}
-                $process = Get-Process -Id ([int]$svcPid) -ErrorAction SilentlyContinue
+                for ($attempt = 0; $attempt -lt 20; $attempt++) {
+                    Start-Sleep -Milliseconds 500
+                    $process = Get-Process -Id ([int]$svcPid) -ErrorAction SilentlyContinue
+                    if (-not $process) { break }
+                }
             }
             if ($process) {
                 Write-Host "[错误] 服务进程仍在运行，已停止卸载，未删除目录" -ForegroundColor Red
                 Write-Log "卸载" "服务进程未退出 PID=$svcPid"
                 return
             }
+            Remove-Item "$targetDir\server.pid" -Force -ErrorAction SilentlyContinue
             Write-Log "卸载" "停止服务 PID=$svcPid"
         }
     }
@@ -498,6 +502,11 @@ function Uninstall-All {
     # 删除安装目录
     if (Test-Path $targetDir) {
         Write-Log "卸载" "准备删除目录 $targetDir"
+        $targetFullPath = (Resolve-Path $targetDir).Path.TrimEnd('\')
+        $currentFullPath = (Get-Location).Path.TrimEnd('\')
+        if ($currentFullPath -eq $targetFullPath -or $currentFullPath.StartsWith("$targetFullPath\", [System.StringComparison]::OrdinalIgnoreCase)) {
+            Set-Location $env:TEMP
+        }
         Remove-Item $targetDir -Recurse -Force
         Write-Host "[完成] 已删除 $targetDir" -ForegroundColor Green
     } else {
