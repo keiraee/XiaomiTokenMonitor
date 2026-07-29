@@ -16,8 +16,11 @@ const ROOT = path.join(__dirname, '..');
 const PORT_CONF = path.join(ROOT, 'port.conf');
 const HOST = '127.0.0.1';
 const API_URL = 'https://platform.xiaomimimo.com/api/v1/tokenPlan/usage';
-const REFRESH_INTERVAL = 12 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT = 30_000;
+const REFRESH_AHEAD_MS = 5 * 60 * 1000;
+
+const SERVICE_TOKEN_NAME = 'api-platform_serviceToken';
+const SERVICE_TOKEN_FALLBACK_MS = 24 * 60 * 60 * 1000;
 
 function getPort() {
   try {
@@ -45,6 +48,7 @@ const PORT = getPort();
 let currentCookies = null;
 let lastRefresh = null;
 let refreshTimer = null;
+let nextRefreshAt = null;
 
 async function requestUsage(cookies) {
   const controller = new AbortController();
@@ -83,6 +87,7 @@ async function fetchUsage(cookies) {
       currentCookies = await refreshAuth();
       cookies = currentCookies;
       lastRefresh = new Date();
+      scheduleNextRefresh();
       continue;
     }
 
@@ -96,18 +101,38 @@ async function fetchUsage(cookies) {
   throw new Error('认证重试次数已用尽');
 }
 
+function scheduleNextRefresh() {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  const serviceToken = currentCookies?.find(c => c.name === SERVICE_TOKEN_NAME);
+  const expiresAt = Number.isFinite(serviceToken?.expires) && serviceToken.expires > 0
+    ? serviceToken.expires * 1000
+    : Date.now() + SERVICE_TOKEN_FALLBACK_MS;
+  const delay = Math.max(expiresAt - Date.now() - REFRESH_AHEAD_MS, 60_000);
+  nextRefreshAt = new Date(Date.now() + delay);
+  const mins = Math.round(delay / 60_000);
+  log.info(`下次刷新时间: ${nextRefreshAt.toLocaleString('zh-CN')} (${mins} 分钟后)`);
+  refreshTimer = setTimeout(refreshCookies, delay);
+}
+
 async function refreshCookies() {
-  log.info('===== 定时刷新 Cookie 开始 =====');
+  log.info('===== 自动刷新 Cookie 开始 =====');
   try {
     currentCookies = await refreshAuth();
     lastRefresh = new Date();
-    log.info('定时刷新成功');
-    notify('小米平台 - Token 已刷新', '下次刷新将在 12 小时后');
+    log.info('自动刷新成功');
+    const nextStr = nextRefreshAt?.toLocaleString('zh-CN') || '约 24 小时内';
+    notify('小米平台 - Token 已刷新', `下次刷新: ${nextStr}`);
+    scheduleNextRefresh();
   } catch (e) {
-    log.error(`定时刷新失败: ${e.message}`);
+    log.error(`自动刷新失败: ${e.message}`);
     notify('小米平台 - 刷新失败', 'SSO 登录失败，请手动重新登录');
+    // 失败后 5 分钟重试
+    if (refreshTimer) clearTimeout(refreshTimer);
+    nextRefreshAt = new Date(Date.now() + 5 * 60_000);
+    refreshTimer = setTimeout(refreshCookies, 5 * 60_000);
+    log.info('5 分钟后重试刷新');
   } finally {
-    log.info('===== 定时刷新 Cookie 结束 =====');
+    log.info('===== 自动刷新 Cookie 结束 =====');
   }
 }
 
@@ -133,6 +158,7 @@ app.post('/relogin', async (req, res) => {
     if (fs.existsSync(COOKIES_FILE)) fs.unlinkSync(COOKIES_FILE);
     currentCookies = await login();
     lastRefresh = new Date();
+    scheduleNextRefresh();
     notify('小米平台 - 重新登录成功', 'Cookie 已更新');
     res.json({ ok: true });
   } catch (e) {
@@ -155,13 +181,14 @@ app.get('/', async (req, res) => {
   }
 
   const refreshTime = lastRefresh ? lastRefresh.toLocaleString('zh-CN') : '未刷新';
+  const nextStr = nextRefreshAt ? nextRefreshAt.toLocaleString('zh-CN') : '未调度';
   res.send(`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><title>小米 Token 用量</title>
 <style>body{font-family:system-ui;max-width:800px;margin:40px auto;padding:20px;background:#f5f5f5}.card{background:#fff;border-radius:8px;padding:20px;box-shadow:0 2px 8px #0002}pre{background:#f0f0f0;padding:16px;border-radius:6px;overflow:auto}button{background:#ff6700;color:#fff;border:0;padding:10px 20px;border-radius:6px;cursor:pointer;margin-right:8px}.time{color:#888;font-size:14px}</style></head>
 <body><h1>小米 Token 用量监控</h1><div class="card">
 <p class="time">请求时间: ${escapeHtml(time)}</p>
 <p class="time">Cookie 上次刷新: ${escapeHtml(refreshTime)}</p>
-<p class="time">下次自动刷新: 12 小时后</p>
+<p class="time">下次自动刷新: ${escapeHtml(nextStr)}</p>
 <pre>${escapeHtml(display)}</pre>
 <button onclick="location.reload()">刷新</button>
 <button onclick="fetch('/relogin',{method:'POST'}).then(()=>location.reload())">重新登录</button>
@@ -176,7 +203,7 @@ const server = app.listen(PORT, HOST, async () => {
     currentCookies = await ensureAuth();
     lastRefresh = new Date();
     notify('小米平台监控已启动', `代理地址: http://${HOST}:${PORT}/usage`);
-    refreshTimer = setInterval(refreshCookies, REFRESH_INTERVAL);
+    scheduleNextRefresh();
   } catch (e) {
     log.error(`首次认证失败: ${e.message}`);
     notify('小米平台 - 启动失败', e.message);
@@ -185,7 +212,7 @@ const server = app.listen(PORT, HOST, async () => {
 });
 
 async function shutdown(exitCode = 0) {
-  if (refreshTimer) clearInterval(refreshTimer);
+  if (refreshTimer) clearTimeout(refreshTimer);
   try { await new Promise(resolve => server.close(resolve)); } catch {}
   try { fs.unlinkSync(path.join(ROOT, 'server.pid')); } catch {}
   if (exitCode) process.exitCode = exitCode;

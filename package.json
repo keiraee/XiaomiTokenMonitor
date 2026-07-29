@@ -4,7 +4,8 @@
   "description": "Xiaomi platform token usage monitor with auto SSO login",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test:refresh": "node test-refresh.js"
   },
   "keywords": ["xiaomi", "token", "monitor"],
   "author": "",
