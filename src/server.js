@@ -7,6 +7,7 @@ const {
   login,
   refreshAuth,
   getUserAgent,
+  checkPassTokenHealth,
   COOKIES_FILE,
 } = require('./auth');
 const { notify } = require('./notify');
@@ -117,6 +118,20 @@ function scheduleNextRefresh() {
 async function refreshCookies() {
   log.info('===== 自动刷新 Cookie 开始 =====');
   try {
+    // 先检查 passToken 是否在服务端仍然有效
+    const health = await checkPassTokenHealth();
+    if (!health.valid) {
+      log.warn(`passToken 失效: ${health.reason}`);
+      log.info('需要重新登录，正在打开浏览器...');
+      notify('小米平台 - 需要重新登录', 'passToken 已失效，请在弹出的浏览器中登录');
+      currentCookies = await login();
+      lastRefresh = new Date();
+      log.info('重新登录成功');
+      notify('小米平台 - 重新登录成功', 'Cookie 已更新，自动刷新已恢复');
+      scheduleNextRefresh();
+      return;
+    }
+
     currentCookies = await refreshAuth();
     lastRefresh = new Date();
     log.info('自动刷新成功');
@@ -125,7 +140,14 @@ async function refreshCookies() {
     scheduleNextRefresh();
   } catch (e) {
     log.error(`自动刷新失败: ${e.message}`);
-    notify('小米平台 - 刷新失败', 'SSO 登录失败，请手动重新登录');
+    // 检查是否是 passToken 失效导致的
+    const health = await checkPassTokenHealth().catch(() => ({ valid: true, reason: 'check failed' }));
+    if (!health.valid) {
+      log.warn(`passToken 失效: ${health.reason}，将在 5 分钟后重试`);
+      notify('小米平台 - 需要重新登录', 'passToken 已失效，请手动打开管理页面重新登录');
+    } else {
+      notify('小米平台 - 刷新失败', e.message);
+    }
     // 失败后 5 分钟重试
     if (refreshTimer) clearTimeout(refreshTimer);
     nextRefreshAt = new Date(Date.now() + 5 * 60_000);
@@ -195,6 +217,20 @@ app.get('/', async (req, res) => {
 </div></body></html>`);
 });
 
+// 定期检查 passToken 健康状态（每小时一次）
+const HEALTH_CHECK_INTERVAL = 60 * 60 * 1000;
+let healthCheckTimer = null;
+
+async function runHealthCheck() {
+  const health = await checkPassTokenHealth();
+  if (!health.valid) {
+    log.warn(`[健康检查] passToken 失效: ${health.reason}`);
+    notify('小米平台 - passToken 已失效', '请重新登录以恢复自动刷新');
+  } else {
+    log.info(`[健康检查] passToken 正常: ${health.reason}`);
+  }
+}
+
 const server = app.listen(PORT, HOST, async () => {
   log.info(`小米 Token 监控服务启动，地址: http://${HOST}:${PORT}`);
   fs.writeFileSync(path.join(ROOT, 'server.pid'), String(process.pid));
@@ -204,6 +240,8 @@ const server = app.listen(PORT, HOST, async () => {
     lastRefresh = new Date();
     notify('小米平台监控已启动', `代理地址: http://${HOST}:${PORT}/usage`);
     scheduleNextRefresh();
+    // 启动定期健康检查
+    healthCheckTimer = setInterval(runHealthCheck, HEALTH_CHECK_INTERVAL);
   } catch (e) {
     log.error(`首次认证失败: ${e.message}`);
     notify('小米平台 - 启动失败', e.message);
@@ -213,6 +251,7 @@ const server = app.listen(PORT, HOST, async () => {
 
 async function shutdown(exitCode = 0) {
   if (refreshTimer) clearTimeout(refreshTimer);
+  if (healthCheckTimer) clearInterval(healthCheckTimer);
   try { await new Promise(resolve => server.close(resolve)); } catch {}
   try { fs.unlinkSync(path.join(ROOT, 'server.pid')); } catch {}
   if (exitCode) process.exitCode = exitCode;

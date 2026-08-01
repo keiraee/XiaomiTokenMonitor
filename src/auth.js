@@ -5,7 +5,6 @@ const path = require('path');
 const COOKIES_FILE = path.join(__dirname, '..', 'cookies.json');
 const META_FILE = path.join(__dirname, '..', 'meta.json');
 const PLATFORM_URL = 'https://platform.xiaomimimo.com';
-const USAGE_URL = PLATFORM_URL + '/api/v1/tokenPlan/usage';
 const SERVICE_TOKEN_NAME = 'api-platform_serviceToken';
 const UA_POOL = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36',
@@ -71,12 +70,29 @@ function parseSetCookie(setCookie) {
   return cookie;
 }
 
+function hasValidServiceTokenCookie(setCookies) {
+  return setCookies.some(c => {
+    const parsed = parseSetCookie(c);
+    return parsed?.name === SERVICE_TOKEN_NAME && parsed.value;
+  });
+}
+
+function domainsMatch(a, b) {
+  return a.replace(/^\./, '') === b.replace(/^\./, '');
+}
+
+const DEFAULT_SESSION_MAXAGE = 7 * 24 * 60 * 60; // 7 days
+
 function applySetCookies(cookies, setCookies) {
   for (const raw of setCookies) {
     const incoming = parseSetCookie(raw);
     if (!incoming) continue;
+    // Session cookies (no Max-Age/Expires): set a default expiry
+    if (!Number.isFinite(incoming.expires)) {
+      incoming.expires = Date.now() / 1000 + DEFAULT_SESSION_MAXAGE;
+    }
     const existing = cookies.find(c => c.name === incoming.name &&
-      (!incoming.domain || !c.domain || c.domain === incoming.domain));
+      (!incoming.domain || !c.domain || domainsMatch(c.domain, incoming.domain)));
     if (existing) Object.assign(existing, incoming);
     else cookies.push({ domain: '.platform.xiaomimimo.com', path: '/', ...incoming });
   }
@@ -91,7 +107,7 @@ function withAuthLock(operation) {
 }
 
 /**
- * Pure HTTP refresh: follow SSO redirects manually, no browser needed.
+ * Pure HTTP refresh: use SSO JSON API to get a new serviceToken.
  * Works when passToken is still valid server-side.
  */
 async function performHttpRefresh() {
@@ -100,44 +116,54 @@ async function performHttpRefresh() {
   if (!cookies) throw new Error('Cookie file is missing or invalid');
 
   const ua = getUserAgent();
-  // Step 1: Hit the platform with existing cookies, follow redirects manually
-  let url = USAGE_URL;
-  let resp;
+  const cookieHeader = cookiesToHeader(cookies);
+  const headers = { 'Cookie': cookieHeader, 'User-Agent': ua };
+
+  // Step 1: Call SSO serviceLogin JSON API with passToken
+  const ssoUrl = 'https://account.xiaomi.com/pass/serviceLogin'
+    + '?callback=https%3A%2F%2Fplatform.xiaomimimo.com%2Fsts%3Fsign%3DM7gfywevl3CG5YTTcZDifhK6IK8%253D'
+    + '%26followup%3Dhttps%253A%252F%252Fplatform.xiaomimimo.com%252Fconsole%252Fbalance'
+    + '&sid=api-platform&_json=true&_locale=zh_CN';
+
+  const resp1 = await fetch(ssoUrl, {
+    redirect: 'manual',
+    headers,
+    signal: AbortSignal.timeout(15000),
+  });
+  const text1 = await resp1.text();
+  const json1 = JSON.parse(text1.match(/\{.*\}/)?.[0] || '{}');
+  if (json1.code !== 0) {
+    throw new Error('SSO rejected passToken (code=' + json1.code + ', ' + (json1.description || '') + ')');
+  }
+  if (!json1.location) {
+    throw new Error('SSO returned no redirect location');
+  }
+
+  // Step 2: Follow SSO redirect to platform, collect Set-Cookie
+  let url = json1.location;
   let gotNewServiceToken = false;
   for (let i = 0; i < 10; i++) {
-    resp = await fetch(url, {
+    const resp = await fetch(url, {
       redirect: 'manual',
-      headers: {
-        // Rebuild the header after every response so SSO cookies set on a
-        // redirect are available to the next request.
-        Cookie: cookiesToHeader(cookies),
-        'User-Agent': ua,
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
+      headers,
       signal: AbortSignal.timeout(15000),
     });
+
+    const setCookies = resp.headers.getSetCookie?.() || [];
+    applySetCookies(cookies, setCookies);
+    gotNewServiceToken ||= hasValidServiceTokenCookie(setCookies);
 
     if (resp.status >= 300 && resp.status < 400) {
       const location = resp.headers.get('location');
       if (!location) break;
       url = location.startsWith('http') ? location : new URL(location, url).href;
-      // Collect any Set-Cookie from redirect responses
-      const setCookies = resp.headers.getSetCookie?.() || [];
-      applySetCookies(cookies, setCookies);
-      gotNewServiceToken ||= setCookies.some(c => parseSetCookie(c)?.name === SERVICE_TOKEN_NAME);
       continue;
     }
     break;
   }
 
-  // Step 2: Check if we ended up back on the platform with a new serviceToken
-  // The final response Set-Cookie may contain the new serviceToken
-  const finalSetCookies = resp.headers.getSetCookie?.() || [];
-  applySetCookies(cookies, finalSetCookies);
-  gotNewServiceToken ||= finalSetCookies.some(c => parseSetCookie(c)?.name === SERVICE_TOKEN_NAME);
-
   if (!gotNewServiceToken) {
-    throw new Error('HTTP refresh did not produce serviceToken (status=' + resp.status + ')');
+    throw new Error('HTTP refresh did not produce serviceToken');
   }
 
   fs.writeFileSync(COOKIES_FILE, JSON.stringify(cookies, null, 2));
@@ -172,8 +198,8 @@ async function performHeadlessRefresh() {
       });
 
       const newCookies = await context.cookies();
-      if (!newCookies.some(c => c.name === SERVICE_TOKEN_NAME)) {
-        throw new Error('headless refresh did not produce serviceToken');
+      if (!isServiceTokenValid(newCookies)) {
+        throw new Error('headless refresh did not produce a valid serviceToken');
       }
 
       fs.writeFileSync(COOKIES_FILE, JSON.stringify(newCookies, null, 2));
@@ -190,10 +216,6 @@ async function performHeadlessRefresh() {
   }
 
   throw lastError || new Error('headless refresh failed');
-}
-
-async function headlessRefresh() {
-  return withAuthLock(performHeadlessRefresh);
 }
 
 async function performLogin() {
@@ -238,7 +260,7 @@ function loadCookies() {
 
 function cookiesToHeader(cookies) {
   if (!Array.isArray(cookies)) return '';
-  return cookies.map(c => `${c.name}=${c.value}`).join('; ');
+  return cookies.filter(c => c.name && c.value).map(c => `${c.name}=${c.value}`).join('; ');
 }
 
 async function ensureAuth() {
@@ -321,9 +343,53 @@ async function testRefresh() {
   return result;
 }
 
+/**
+ * Check if the passToken is still accepted by the SSO server.
+ * Returns { valid, reason } without opening a browser.
+ */
+async function checkPassTokenHealth() {
+  const cookies = loadCookies();
+  if (!cookies || !isPassTokenValid(cookies)) {
+    return { valid: false, reason: 'passToken missing or locally expired' };
+  }
+
+  try {
+    const ua = getUserAgent();
+    const cookieHeader = cookiesToHeader(cookies);
+    const resp = await fetch(
+      'https://account.xiaomi.com/pass/serviceLogin?sid=api-platform&callback=https%3A%2F%2Fplatform.xiaomimimo.com%2Fsts&_json=true',
+      {
+        redirect: 'manual',
+        headers: { Cookie: cookieHeader, 'User-Agent': ua },
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+
+    const text = await resp.text();
+    // Response format: &&&START&&&{"code":70016,...}
+    const jsonMatch = text.match(/\{.*\}/);
+    if (jsonMatch) {
+      const data = JSON.parse(jsonMatch[0]);
+      if (data.code === 70016) {
+        return { valid: false, reason: 'SSO rejected passToken (code 70016)' };
+      }
+      // If we get a different code, the passToken might still be valid
+      return { valid: true, reason: 'SSO accepted passToken (code ' + data.code + ')' };
+    }
+
+    // If redirected (302), SSO is rejecting
+    if (resp.status >= 300 && resp.status < 400) {
+      return { valid: false, reason: 'SSO redirected (status ' + resp.status + ')' };
+    }
+
+    return { valid: true, reason: 'SSO responded OK (status ' + resp.status + ')' };
+  } catch (e) {
+    return { valid: false, reason: 'health check failed: ' + e.message };
+  }
+}
+
 module.exports = {
   login,
-  headlessRefresh,
   refreshAuth,
   loadCookies,
   cookiesToHeader,
@@ -334,5 +400,6 @@ module.exports = {
   performHttpRefresh,
   performHeadlessRefresh,
   testRefresh,
+  checkPassTokenHealth,
   COOKIES_FILE,
 };
