@@ -54,7 +54,7 @@ if exist server.pid (
     )
 )
 if exist server.log del /q server.log
-powershell -Command "Start-Process -FilePath 'node' -ArgumentList 'src\server.js' -WindowStyle Hidden -WorkingDirectory '%~dp0'"
+powershell -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c npm start' -WindowStyle Hidden -WorkingDirectory '%~dp0'"
 timeout /t 5 /nobreak >nul
 if exist server.pid (
     set /p PID=<server.pid
@@ -151,7 +151,7 @@ powershell -Command "Start-Process -FilePath '%~f0' -ArgumentList '_install' -Ve
 goto menu
 
 :_install
-schtasks /create /tn "XiaomiTokenMonitor" /tr "node \"%~dp0src\server.js\"" /sc onlogon /rl highest /f
+schtasks /create /tn "XiaomiTokenMonitor" /tr "cmd /c \"cd /d \"%~dp0\" && npm start\"" /sc onlogon /rl highest /f
 if !errorlevel! equ 0 (
     echo  [OK] Auto-start installed.
 ) else (
@@ -183,7 +183,7 @@ goto :eof
 
 :start_silent
 if exist server.log del /q server.log
-powershell -Command "Start-Process -FilePath 'node' -ArgumentList 'src\server.js' -WindowStyle Hidden -WorkingDirectory '%~dp0'"
+powershell -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c npm start' -WindowStyle Hidden -WorkingDirectory '%~dp0'"
 timeout /t 5 /nobreak >nul
 goto :eof
 

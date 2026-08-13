@@ -8,3 +8,6 @@ server.log
 xtm.log
 .claude/
 .env
+web/dist/
+tmp-js/
+tmp/
