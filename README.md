@@ -10,10 +10,24 @@
 - **JSON 接口** — `GET /usage` 给模板或脚本用
 - **Docker 部署** — 单容器，数据卷持久化 Cookie
 
-## 快速开始（Docker）
+## 一键部署（推荐）
+
+不需要克隆仓库，拉官方镜像即可：
 
 ```bash
-docker compose up -d --build
+docker run -d \
+  --name xiaomi-token-monitor \
+  --restart unless-stopped \
+  -p 9990:9990 \
+  -v xiaomi-token-data:/data \
+  ghcr.io/keiraee/xiaomi-token-monitor:1.0.0
+```
+
+或用 compose：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/keiraee/XiaomiTokenMonitor/v1.0.0/docker-compose.yml -o docker-compose.yml
+docker compose up -d
 ```
 
 浏览器打开：
@@ -22,15 +36,17 @@ docker compose up -d --build
 http://NAS的IP:9990/
 ```
 
-首次进入会要求扫码登录。Cookie 保存在 `./data/`。
+首次进入扫码登录。Cookie 存在 Docker 数据卷 `xiaomi-token-data` 里，**删不删本机源码目录都不影响容器**。
 
 常用命令：
 
 ```bash
-docker compose logs -f
-docker compose restart
-docker compose down
+docker logs -f xiaomi-token-monitor
+docker restart xiaomi-token-monitor
+docker stop xiaomi-token-monitor
 ```
+
+> 首次发布后若 `docker pull` 提示无权限，到 GitHub → Packages → `xiaomi-token-monitor` → Package settings → Change visibility → Public。
 
 ## 环境变量
 
@@ -42,25 +58,27 @@ docker compose down
 
 改宿主机端口示例：
 
-```yaml
-ports:
-  - "18080:9990"
+```bash
+docker run -d --name xiaomi-token-monitor --restart unless-stopped \
+  -p 9992:9990 \
+  -v xiaomi-token-data:/data \
+  ghcr.io/keiraee/xiaomi-token-monitor:1.0.0
 ```
 
-## 本地开发（可选）
+## 从源码构建（开发用）
+
+```bash
+git clone https://github.com/keiraee/XiaomiTokenMonitor.git
+cd XiaomiTokenMonitor
+docker compose -f docker-compose.build.yml up -d --build
+```
+
+本地 Node 开发：
 
 ```bash
 npm install
 npm run build
 npm start
-```
-
-默认监听 `0.0.0.0:9990`，数据写到项目下 `data/`。
-
-前端热更新：
-
-```bash
-npm run dev
 ```
 
 ## 接口
@@ -102,9 +120,9 @@ npm run dev
 });
 ```
 
-## 数据文件
+## 数据
 
-挂载目录 `./data`（容器内 `/data`）：
+默认挂载命名卷 `xiaomi-token-data`（容器内 `/data`）：
 
 - `cookies.json` — 登录 Cookie
 - `meta.json` — User-Agent 等元数据
@@ -125,6 +143,6 @@ npm run dev
 
 ## 注意
 
-- 面板本身不再设额外密码；能访问端口的人可以看到登录页。请放在可信局域网。
-- 已移除 Windows 弹窗通知、密码 / 短信登录、Playwright 浏览器登录。
+- 面板不再设额外密码；能访问端口的人可以看到登录页，请放在可信局域网。
 - `passToken` 失效后需要重新扫码。
+- 镜像发布在 GitHub Container Registry：`ghcr.io/keiraee/xiaomi-token-monitor`

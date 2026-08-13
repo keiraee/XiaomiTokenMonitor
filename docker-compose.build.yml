@@ -1,6 +1,9 @@
+# 从源码构建时使用：
+#   docker compose -f docker-compose.build.yml up -d --build
 services:
   xiaomi-token-monitor:
-    image: ghcr.io/keiraee/xiaomi-token-monitor:1.0.0
+    build: .
+    image: xiaomi-token-monitor:local
     container_name: xiaomi-token-monitor
     restart: unless-stopped
     ports:
