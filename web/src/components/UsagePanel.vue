@@ -24,7 +24,7 @@ const credits = computed(() => {
 <template>
   <section class="panel panel-feature">
     <div class="panel-head">
-      <p class="eyebrow">Usage</p>
+      <p class="eyebrow">用量</p>
       <h2>用量概览</h2>
     </div>
     <div class="metric-display">

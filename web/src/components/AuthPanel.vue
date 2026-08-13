@@ -36,7 +36,7 @@ async function onRefresh() {
 }
 
 async function onLogout() {
-  if (!confirm('确定退出登录并清除本地 Cookie？')) return;
+  if (!confirm('确定退出登录并清除 Cookie？')) return;
   message.value = '';
   await logout();
   messageType.value = 'ok';
@@ -48,7 +48,7 @@ async function onLogout() {
 <template>
   <section class="panel">
     <div class="panel-head">
-      <p class="eyebrow">Authentication</p>
+      <p class="eyebrow">认证</p>
       <h2>认证状态</h2>
     </div>
     <div class="status-line" :class="badge[1]">

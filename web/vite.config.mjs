@@ -14,9 +14,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
-      '/api': 'http://127.0.0.1:9999',
-      '/usage': 'http://127.0.0.1:9999',
+      proxy: {
+      '/api': 'http://127.0.0.1:9990',
+      '/usage': 'http://127.0.0.1:9990',
     },
   },
 });

@@ -37,6 +37,7 @@ async function startQrLogin() {
   cleanupSessions();
   const ctx = await getLoginContext();
   const jar = new CookieJar();
+  jar.persist = false;
   ensureDeviceId(jar);
 
   const qs = encodeURIComponent(
@@ -133,6 +134,7 @@ async function pollLoop(sessionId) {
       throw new Error('登录完成但未获得 passToken');
     }
 
+    session.jar.persist = true;
     session.jar.save();
     session.status = 'success';
     session.completedAt = Date.now();

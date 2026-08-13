@@ -35,7 +35,7 @@ async function main() {
   const status = getAuthStatus();
 
   if (!status.loggedIn) {
-    console.log('[FAIL] 未登录。请打开面板导入 Cookie 或浏览器登录。');
+    console.log('[FAIL] 未登录。请打开面板扫码登录。');
     process.exit(1);
   }
 

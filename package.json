@@ -1,23 +1,23 @@
 {
   "name": "xiaomi-token-monitor",
-  "version": "1.0.0",
-  "description": "Xiaomi platform token usage monitor with auto SSO login",
+  "version": "2.0.0",
+  "description": "Xiaomi MiMo token usage monitor for Docker / NAS",
   "main": "src/server.js",
   "scripts": {
     "dev": "vite --config web/vite.config.mjs",
     "build": "vite build --config web/vite.config.mjs",
-    "prestart": "npm run build",
     "start": "node src/server.js",
     "test:refresh": "node test-refresh.js"
   },
-  "keywords": ["xiaomi", "token", "monitor"],
+  "keywords": ["xiaomi", "token", "monitor", "docker"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
-    "express": "^5.2.1",
-    "playwright": "^1.61.1",
     "vite": "^7.1.2",
     "vue": "^3.5.18"
   }

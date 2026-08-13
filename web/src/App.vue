@@ -39,7 +39,6 @@ onUnmounted(() => {
 <template>
   <div v-if="booting" class="login-shell">
     <div class="login-brand">
-      <p class="eyebrow">Local Service</p>
       <h1>Token Monitor</h1>
       <p class="login-brand-sub">加载中</p>
     </div>

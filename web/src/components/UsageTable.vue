@@ -7,7 +7,7 @@ defineProps({
 <template>
   <section v-if="items.length" class="panel panel-wide">
     <div class="panel-head">
-      <p class="eyebrow">Details</p>
+      <p class="eyebrow">明细</p>
       <h2>详细用量</h2>
     </div>
     <div class="table-wrap">

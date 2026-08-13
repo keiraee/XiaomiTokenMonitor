@@ -23,19 +23,3 @@ export const cancelQr = (sessionId) => api('/api/login/qr/cancel', {
   method: 'POST',
   body: JSON.stringify({ sessionId }),
 });
-export const loginPassword = (payload) => api('/api/login/password', {
-  method: 'POST',
-  body: JSON.stringify(payload),
-});
-export const sendPhoneCode = (payload) => api('/api/login/phone/send', {
-  method: 'POST',
-  body: JSON.stringify(payload),
-});
-export const verifyPhone = (payload) => api('/api/login/phone/verify', {
-  method: 'POST',
-  body: JSON.stringify(payload),
-});
-export const refreshCaptcha = (sessionId) => api('/api/login/captcha/refresh', {
-  method: 'POST',
-  body: JSON.stringify({ sessionId }),
-});

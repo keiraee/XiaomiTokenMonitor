@@ -1,4 +1,5 @@
 node_modules/
+data/
 cookies.json
 meta.json
 port.conf
@@ -11,3 +12,4 @@ xtm.log
 web/dist/
 tmp-js/
 tmp/
+tmp-*

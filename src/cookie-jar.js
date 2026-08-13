@@ -1,10 +1,13 @@
 const fs = require('fs');
-const path = require('path');
+const { COOKIES_FILE } = require('./config');
 
-const COOKIES_FILE = path.join(__dirname, '..', 'cookies.json');
 const PASS_TOKEN_NAME = 'passToken';
 const SERVICE_TOKEN_NAME = 'api-platform_serviceToken';
 const DEFAULT_SESSION_MAXAGE = 7 * 24 * 60 * 60;
+
+function cookiesFile() {
+  return COOKIES_FILE();
+}
 
 function normalizeDomain(domain) {
   return (domain || '').replace(/^\./, '').toLowerCase();
@@ -20,7 +23,9 @@ function isExpired(cookie, nowSec = Date.now() / 1000) {
 }
 
 function isTombstone(cookie, nowSec = Date.now() / 1000) {
-  return !cookie.value || (isExpired(cookie, nowSec) && !cookie.value);
+  const value = String(cookie.value || '');
+  if (!value || value.toUpperCase() === 'EXPIRED') return true;
+  return isExpired(cookie, nowSec) && !cookie.value;
 }
 
 function cookieKey(cookie) {
@@ -81,6 +86,7 @@ function normalizeIncomingCookie(cookie) {
 class CookieJar {
   constructor() {
     this.cookies = [];
+    this.persist = true;
   }
 
   static load() {
@@ -113,12 +119,13 @@ class CookieJar {
 
   save() {
     this.prune();
-    fs.writeFileSync(COOKIES_FILE, JSON.stringify(this.cookies, null, 2));
+    if (!this.persist) return;
+    fs.writeFileSync(cookiesFile(), JSON.stringify(this.cookies, null, 2));
   }
 
   clear() {
     this.cookies = [];
-    try { fs.unlinkSync(COOKIES_FILE); } catch {}
+    try { fs.unlinkSync(cookiesFile()); } catch {}
   }
 
   setAll(cookies) {
@@ -155,7 +162,9 @@ class CookieJar {
       if (!incoming) continue;
 
       const key = cookieKey(incoming);
-      const deleteCookie = !incoming.value || (Number.isFinite(incoming.expires) && incoming.expires <= nowSec);
+      const deleteCookie = !incoming.value
+        || String(incoming.value).toUpperCase() === 'EXPIRED'
+        || (Number.isFinite(incoming.expires) && incoming.expires <= nowSec);
 
       if (deleteCookie) {
         this.cookies = this.cookies.filter(c => cookieKey(c) !== key);
@@ -187,7 +196,7 @@ class CookieJar {
     const latest = new Map();
 
     for (const cookie of this.cookies) {
-      if (!cookie.name || !cookie.value || isExpired(cookie, nowSec)) continue;
+      if (!cookie.name || !cookie.value || cookie.value.toUpperCase() === 'EXPIRED' || isExpired(cookie, nowSec)) continue;
       const prev = latest.get(cookie.name);
       if (!prev || (cookie.expires || 0) > (prev.expires || 0)) {
         latest.set(cookie.name, cookie);
@@ -219,51 +228,23 @@ class CookieJar {
 }
 
 function loadRawCookies() {
-  if (!fs.existsSync(COOKIES_FILE)) return [];
+  const file = cookiesFile();
+  if (!fs.existsSync(file)) return [];
   try {
-    const data = JSON.parse(fs.readFileSync(COOKIES_FILE, 'utf-8'));
+    const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
     return Array.isArray(data) ? data : [];
   } catch {
     return [];
   }
 }
 
-function parseCookieHeader(header) {
-  if (!header || typeof header !== 'string') return [];
-  return header.split(';').map(part => part.trim()).filter(Boolean).map(part => {
-    const idx = part.indexOf('=');
-    if (idx <= 0) return null;
-    return {
-      name: part.slice(0, idx).trim(),
-      value: part.slice(idx + 1).trim(),
-      domain: '.xiaomi.com',
-      path: '/',
-      expires: Date.now() / 1000 + DEFAULT_SESSION_MAXAGE,
-    };
-  }).filter(Boolean);
-}
-
-function parseCookieInput(input) {
-  if (!input) return [];
-  if (Array.isArray(input)) return input;
-  if (typeof input === 'string') {
-    const trimmed = input.trim();
-    if (trimmed.startsWith('[')) {
-      const parsed = JSON.parse(trimmed);
-      if (!Array.isArray(parsed)) throw new Error('Cookie JSON 必须是数组');
-      return parsed;
-    }
-    return parseCookieHeader(trimmed);
-  }
-  throw new Error('不支持的 Cookie 格式');
-}
-
 module.exports = {
   CookieJar,
-  COOKIES_FILE,
+  get COOKIES_FILE() {
+    return cookiesFile();
+  },
   PASS_TOKEN_NAME,
   SERVICE_TOKEN_NAME,
-  parseCookieInput,
   parseSetCookie,
   domainsMatch,
   normalizeIncomingCookie,

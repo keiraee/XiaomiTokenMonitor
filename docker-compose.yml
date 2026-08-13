@@ -1,0 +1,15 @@
+services:
+  xiaomi-token-monitor:
+    build: .
+    image: xiaomi-token-monitor:latest
+    container_name: xiaomi-token-monitor
+    restart: unless-stopped
+    ports:
+      # host:container — app default inside remains 9990
+      - "9992:9990"
+    environment:
+      PORT: "9990"
+      HOST: "0.0.0.0"
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data

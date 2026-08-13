@@ -44,7 +44,6 @@ onUnmounted(() => {
 <template>
   <div class="page">
     <header class="hero">
-      <p class="eyebrow">Local Service</p>
       <h1>Token Monitor</h1>
       <p class="subtitle">已登录 · 自动续约 · 用量查询</p>
     </header>
@@ -66,9 +65,5 @@ onUnmounted(() => {
     </div>
 
     <UsageTable :items="usage?.items || []" />
-
-    <footer class="page-foot">
-      <span>127.0.0.1 · Local only</span>
-    </footer>
   </div>
 </template>
